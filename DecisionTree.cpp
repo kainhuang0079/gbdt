@@ -22,7 +22,6 @@ namespace gbdt
 			return pInstance1->index < pInstance2->index;
 	}
 
-	
 	DecisionTreeNode::DecisionTreeNode(
 			DecisionTreeNodeStatus status,
 			uint32 depth,
