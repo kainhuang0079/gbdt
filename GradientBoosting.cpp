@@ -41,8 +41,10 @@ namespace gbdt
 		for(int i=0;i<m_pconfig->TreeNum;i++)
 		{
 			DecisionTree * pTree = new DecisionTree(m_pconfig);
-			ret = pTree->Fit(m_pInstancePool);
-
+			{
+				Comm::TimeStat stat("DecisionTree fit");
+				ret = pTree->Fit(m_pInstancePool);
+			}
 		//	printf("i = %d Fited pTree->FitError = %f\n",i,pTree->FitError());
 			if(ret != 0)
 			{
@@ -51,7 +53,10 @@ namespace gbdt
 			}
 			m_Forest.push_back(pTree);
 			if(m_pconfig->LogLevel >= 2)printf("i = %d FitError = %f TestError = %f\n",i,FitError(),TestError());
-			ret = Residual();
+			{
+				Comm::TimeStat stat("Residual");
+				ret = Residual();
+			}
 			printf("i = %d Residualed\n",i);
 			if(ret != 0)
 			{
@@ -59,16 +64,6 @@ namespace gbdt
 				return -1;
 			}
 		}
-		if(m_pconfig->IsLearnNewInstances)
-		{
-			ret = LearnNewInstance();
-			if(ret != 0)
-			{
-				Comm::LogErr("GradientBoostingForest::Fit fail! LearnNewInstance fail!");
-				return -1;
-			}
-		}
-
 		ret = SaveResult();
 		if(ret != 0)
 		{
@@ -124,10 +119,7 @@ namespace gbdt
 			}
 		}
 
-	//	puts("fuck");
-
 		fclose(fp);
-
 		
 		std::string configfile = m_pconfig->OutputModelFilePath + ".conf";
 		fp = fopen(configfile.c_str(),"w");
@@ -136,7 +128,6 @@ namespace gbdt
 			Comm::LogErr("GradientBoostingForest::SaveModel open %s fail!",configfile.c_str());
 			return -1;
 		}
-	//	puts("fuck, fuck");
 		ret = fprintf(fp,"%s",m_pconfig->ToString().c_str());
 		if(ret < 0)
 		{
@@ -144,9 +135,7 @@ namespace gbdt
 			fclose(fp);
 			return -1;
 		}
-	//	puts("fuck, fuck, fuck");
 		fclose(fp);
-	//	puts("fuck, fuck, fuck, fuck");
 		
 		return 0;
 	}
@@ -189,6 +178,7 @@ namespace gbdt
 		printf("GradientBoostingForest::LoadModel treeNum = %d m_TotLeafCnt = %d\n",treeNum, m_TotLeafCnt);
 		return 0;
 	}
+
 	int GradientBoostingForest::Predict(const std::vector<FloatT> &X, FloatT & predict)
 	{
 		int ret = 0;
@@ -206,12 +196,38 @@ namespace gbdt
 		}
 		return 0;
 	}
+
+	int GradientBoostingForest::Predict(const std::vector<FloatT> &X, FloatT & predict, std::vector<int> &leafs)
+	{
+		int ret = 0;
+		predict = 0;
+		for(uint32 i=0;i<m_Forest.size();i++)
+		{
+			FloatT tmpPredict;
+			int leaf;
+			ret = m_Forest[i]->Predict(X,tmpPredict, leaf);
+			if(ret !=0)
+			{
+				Comm::LogErr("GradientBoostingForest::Predict fail! m_Forest %d Predict fail!",i);
+				return -1;
+			}
+			leafs.push_back(leaf);
+			predict += m_pconfig->LearningRate * tmpPredict;
+		}
+		return 0;
+	}
 	FloatT GradientBoostingForest::FitError()
 	{
 //		puts("FitError do");
 		FloatT ret =0.0;
 		assert(NULL != m_pInstancePool);
-#pragma omp parallel for reduction(+:ret)
+		FloatT sum_weight = 0.0;
+		#pragma omp parallel for schedule(static) reduction(+:sum_weight)
+		for(int i=0;i<m_pInstancePool->Size();i++)
+		{
+			sum_weight += m_pInstancePool->GetInstance(i).weight;
+		}
+		#pragma omp parallel for schedule(static) reduction(+:ret)
 		for(int i=0;i<m_pInstancePool->Size();i++)
 		{
 			FloatT predict;
@@ -222,9 +238,29 @@ namespace gbdt
 			ret = ret + ((m_pInstancePool->GetInstance(i).ys - predict) * (m_pInstancePool->GetInstance(i).ys - predict));
 		}
 //		puts("FitError done");
-		return ret / m_pInstancePool->Size();
+		return ret / sum_weight;
 	}
 
+
+	int GradientBoostingForest::BatchPredict(InstancePool * pInstancepool, std::vector<FloatT> &vecPredict)
+	{
+		for(int i = 0; i < pInstancepool->Size(); i++)
+		{
+			FloatT predict;
+			int ret = Predict(pInstancepool->GetInstance(i).X, predict);
+			if(ret != 0)
+			{
+				Comm::LogErr("GradientBoostingForest::BatchPredict fail i = %d  Instance = %s", i, pInstancepool->GetInstance(i).DebugStr().c_str());
+				return ret;
+			}
+			vecPredict.push_back(predict);
+		}
+		return 0;
+	}
+
+	int GradientBoostingForest::BatchPredict(InstancePool * pInstancepool, std::vector<FloatT> &vecPredict, std::vector< std::vector<FloatT> > &vecLeafs)
+	{
+	}
 	void GradientBoostingForest::SetTestInstancePool(InstancePool * pTestInstancePool)
 	{
 		m_pTestInstancePool = pTestInstancePool;
@@ -239,12 +275,18 @@ namespace gbdt
 			Comm::LogErr("GradientBoostingForest::TestError fail m_pTestInstancePool is NULL");
 			return -1;
 		}
+		FloatT sum_weight = 0.0;
+		#pragma omp parallel for schedule(static) reduction(+:sum_weight)
+		for(int i=0;i<m_pTestInstancePool->Size();i++)
+		{
+			sum_weight += m_pTestInstancePool->GetInstance(i).weight;
+		}
 
 		FloatT lim[8] = {0.5,0.6,0.7,0.8,0.9,0.95,0.97,0.99};
 		int cnt[8] = {0,0,0,0,0,0,0,0};
 		int tot[8] = {0,0,0,0,0,0,0,0};
 
-#pragma omp parallel for reduction(+:ret)
+		#pragma omp parallel for schedule(static) reduction(+:ret)
 		for(int i=0;i<m_pTestInstancePool->Size();i++)
 		{
 			FloatT predict;
@@ -271,6 +313,7 @@ namespace gbdt
 			
 			ret = ret + tmp;
 		}
+		ret = ret / sum_weight;
 
 		for(int i=0;i<8;i++)
 		{
@@ -320,213 +363,6 @@ namespace gbdt
 		return 0;
 
 	}
-
-	int GradientBoostingForest::GetNewInstance(const Instance & instance, Instance & newInstance)
-	{
-		if(!m_pconfig->IsLearnNewInstances)
-		{
-			Comm::LogErr("GradientBoostingForest::GetNewInstance fail! m_pconfig->IsLearnNewInstances is 0 !");
-			return -1;
-		}
-
-		if(!m_TotLeafCnt)
-		{
-			Comm::LogErr("GradientBoostingForest::GetNewInstance fail! m_TotLeafCnt is 0");
-			return -1;
-		}
-		int ret;
-		std::vector<FloatT> tmpX;
-		for(uint32 i=0;i<m_Forest.size();i++)
-		{
-			int fallLeafIndex;
-			FloatT predict;
-			ret = m_Forest[i]->Predict(instance.X,predict,fallLeafIndex);
-			if(ret != 0)
-			{
-				Comm::LogErr("GradientBoostingForest::GetNewInstance fail! m_Forest[%d] Predict fail!",i);
-				return -1;
-			}
-			int LeafIndex = m_Forest[i]->GetNode(fallLeafIndex).m_LeafIndex;
-			if(-1 == LeafIndex)
-			{
-				Comm::LogErr("GradientBoostingForest::GetNewInstance fail m_Forest[%d] LeafIndex is -1 DebugStr <%s>",i,m_Forest[i]->GetNode(fallLeafIndex).DebugStr().c_str());
-				return -1;
-			}
-			tmpX.push_back(LeafIndex);
-		}
-		for(int i=0;i<tmpX.size();i++)
-		{
-			newInstance.X.push_back(tmpX[i]);
-		}
-
-		//IsPushBackOgX
-		if(m_pconfig->IsPushBackOgX)
-		{
-			for(int i=0;i<instance.X.size();i++)
-			{
-				newInstance.X.push_back(instance.X[i]);
-			}
-		}
-		newInstance.ys = instance.ys;
-		newInstance.y = instance.ys;
-		return 0;	
-	}
-
-	int GradientBoostingForest::GetNewInstance(const Instance & instance, SparseInstance &newInstance)
-	{
-		if(!m_pconfig->IsLearnNewInstances)
-		{
-			Comm::LogErr("GradientBoostingForest::GetNewInstance fail! m_pconfig->IsLearnNewInstances is 0 !");
-			return -1;
-		}
-
-		if(!m_TotLeafCnt)
-		{
-			Comm::LogErr("GradientBoostingForest::GetNewInstance fail! m_TotLeafCnt is 0");
-			return -1;
-		}
-		int ret;
-		for(uint32 i=0;i<m_Forest.size();i++)
-		{
-			int fallLeafIndex;
-			FloatT predict;
-			ret = m_Forest[i]->Predict(instance.X,predict,fallLeafIndex);
-			if(ret != 0)
-			{
-				Comm::LogErr("GradientBoostingForest::GetNewInstance fail! m_Forest[%d] Predict fail!",i);
-				return -1;
-			}
-			int LeafIndex = m_Forest[i]->GetNode(fallLeafIndex).m_LeafIndex;
-			if(-1 == LeafIndex)
-			{
-				Comm::LogErr("GradientBoostingForest::GetNewInstance fail m_Forest[%d] LeafIndex is -1 DebugStr <%s>",i,m_Forest[i]->GetNode(fallLeafIndex).DebugStr().c_str());
-				return -1;
-			}
-			newInstance.X.push_back(std::make_pair(LeafIndex,1.0));
-		}
-
-		//IsPushBackOgX
-		if(m_pconfig->IsPushBackOgX)
-		{
-			for(int i=0;i<instance.X.size();i++)
-			{
-				newInstance.X.push_back(std::make_pair(m_TotLeafCnt + i,instance.X[i]));
-			}
-		}
-		newInstance.ys = instance.ys;
-		newInstance.y = instance.ys;
-		return 0;	
-
-	}
-
-	int GradientBoostingForest::GetNewInstancePool(InstancePool &instancepool,InstancePool &newInstancePool)
-	{
-		for(int i=0;i<instancepool.Size();i++)
-		{
-			int ret;
-			Instance newInstance;
-			ret = GetNewInstance(instancepool.GetInstance(i),newInstance);
-			if(ret != 0)
-			{
-				return -1;
-			}
-			newInstancePool.AddInstance(newInstance);
-		}
-		return 0;
-	}
-
-	int GradientBoostingForest::LearnNewInstance()
-	{
-		if(!m_pconfig->IsLearnNewInstances)	
-		{
-			Comm::LogErr("GradientBoostingForest::LearnNewInstance IsLearnNewInstances is 0");
-			return -1;
-		}
-		//	std::vector< std::vector<int> > vecTmpInstances(m_pInstancePool->Size());
-		int LeafCnt = 0;
-		for(int i=0;i<m_Forest.size();i++)
-		{
-			DecisionTree * pTree = m_Forest[i];
-			for(int j=0;j<pTree->Size();j++)
-			{
-			//	printf("SizeSize %d\n",pTree->Size());
-				DecisionTreeNode & node = pTree->GetNode(j);
-				if(LEAF == node.m_status)
-				{
-					/*
-					if(node.m_InstancesHashCode == 1150390567)
-					{
-						printf("fuck debug");
-						node.print();
-					}
-					*/
-					if(NULL == node.m_ppInstances)
-					{
-						Comm::LogErr("GradientBoostingForest::LearnNewInstance fail m_ppInstances is NULL DebugStr = %s",node.DebugStr().c_str());
-						return -1;
-					}
-					node.m_LeafIndex = LeafCnt;
-					LeafCnt++;
-					node.m_ppInstances = Comm::Free(node.m_ppInstances);
-				}
-			}
-		}
-		
-		m_TotLeafCnt = LeafCnt;
-			
-		if(m_pconfig->OutputNewInstancesFilePath == "null")
-		{
-			Comm::LogInfo("GradientBoostingForest::LearnNewInstance OutputNewInstancesFilePath is null");
-			return 0;
-		}
-		std::ostringstream oss;
-		oss.clear();
-		oss.str("");
-		FILE * fp = fopen(m_pconfig->OutputNewInstancesFilePath.c_str(),"w");
-		if(NULL == fp)
-		{
-			Comm::LogErr("GradientBoostingForest::LearnNewInstance fail! open %s fail!",m_pconfig->OutputNewInstancesFilePath.c_str());
-			return -1;
-		}
-
-		//IsPushBackOgX
-		if(m_pconfig->IsPushBackOgX)
-			oss<<"n_feature,"<<LeafCnt + m_pconfig->FeatureNum<<"\n";
-		else 
-			oss<<"n_feature,"<<LeafCnt<<"\n";
-		
-		int ret = fputs(oss.str().c_str(),fp);
-		if(ret < 0)
-		{
-			Comm::LogErr("GradientBoostingForest::LearnNewInstance fail!fputs %s fail!",oss.str().c_str());
-			fclose(fp);
-			return -1;
-		}
-
-		for(int i=0;i<m_pInstancePool->Size();i++)
-		{
-			Instance newInstance;
-			ret = GetNewInstance(m_pInstancePool->GetInstance(i), newInstance);
-			if(ret != 0)
-			{
-				Comm::LogErr("GradientBoostingForest::LearnNewInstance GetNewInstance i = %d fail!",i);
-				fclose(fp);
-				return -1;
-			}
-			std::string str = newInstance.ToString() + "\n";
-			ret = fputs(str.c_str(),fp);
-			if(ret < 0)
-			{
-				Comm::LogErr("GradientBoostingForest::LearnNewInstance fputs %s fail!",str.c_str());
-				fclose(fp);
-				return -1;
-			}
-		}
-
-		fclose(fp);
-		return 0;
-	}
-
 	int GradientBoostingForest::SaveResult()
 	{
 		if(m_pconfig->OutputResultFilePath == "null")
@@ -593,7 +429,10 @@ namespace gbdt
 
 				FloatT target1 = node.m_sum_y_X_weight * node.m_sum_y_X_weight / node.m_sumWeight;
 				FloatT target2 = lson.m_sum_y_X_weight * lson.m_sum_y_X_weight / lson.m_sumWeight + rson.m_sum_y_X_weight * rson.m_sum_y_X_weight / rson.m_sumWeight;
-
+				if(target2 - target1 < 0)
+				{
+					printf("FeatureStat tree [%d] node [%s] target2 [%f] target1 [%f]\n", i, m_Forest[i]->GetNode(j).DebugStr().c_str(), target2, target1);
+				}
 				vecFeatureInfo[node.m_splitFeatureId].first += (target2 - target1);
 			}
 		}
@@ -656,13 +495,13 @@ namespace gbdt
 		for(int i = m_begin ;i < m_end; i++)
 		{
 			FloatT predict;
-			ret = m_pModel->Predict(m_pInstancePool->GetInstance(i).X, predict);
+			ret = m_pModel->m_Forest[m_pModel->m_Forest.size() - 1]->Predict(m_pInstancePool->GetInstance(i).X, predict);
 			if(ret !=0)
 			{
 				Comm::LogErr("ResidualThreadWork::DoWork fail! m_pModel Predict fail!");
 				return -1;
 			}
-			m_pInstancePool->GetInstance(i).y = m_pInstancePool->GetInstance(i).ys - predict;
+			m_pInstancePool->GetInstance(i).y = m_pInstancePool->GetInstance(i).y - predict * m_pconfig->LearningRate;
 		}
 		return 0;	
 	}

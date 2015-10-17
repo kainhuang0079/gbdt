@@ -1,5 +1,5 @@
-CFLAGS =-O3 -Wall
-FFLAGS =-lpthread -fopenmp
+CFLAGS = -Wall -O2
+FFLAGS =-lpthread -fopenmp -ltcmalloc
 gbdt_train:gbdtmain.cpp mempool.h DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o
 	g++ $(CFLAGS) -o gbdt_train gbdtmain.cpp DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o $(FFLAGS)
 testGradientBoosting:testGradientBoosting.cpp mempool.h DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o 
@@ -14,8 +14,8 @@ testDecisionTree:testDecisionTree.cpp mempool.h DecisionTree.o unity.o Log.o gbd
 	g++ $(CFLAGS) -o testDecisionTree testDecisionTree.cpp DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o $(FFLAGS)
 DecisionTree.o:DecisionTree.cpp DecisionTree.h
 	g++ $(CFLAGS) -c DecisionTree.cpp $(FFLAGS)
-unity.o:unity.cpp unity.h
-	g++ $(CFLAGS) -c unity.cpp
+unity.o:unity.cpp unity.h Log.cpp Log.h
+	g++ $(CFLAGS) -c unity.cpp Log.cpp
 Log.o:Log.cpp Log.h
 	g++ $(CFLAGS) -c Log.cpp
 gbdtconf.o:gbdtconf.cpp gbdtconf.h

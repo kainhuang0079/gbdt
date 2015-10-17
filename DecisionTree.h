@@ -61,7 +61,7 @@ namespace gbdt
 
 			~DecisionTreeNode();
 			std::string ToString();
-			std::string DebugStr();
+			std::string DebugStr() const;
 			void print();
 		public:
 			DecisionTreeNodeStatus m_status; 
@@ -135,7 +135,7 @@ namespace gbdt
 	};
 
 
-	class SearchSplitPointerWork : public Comm::Work
+	class SearchSplitPointerWork
 	{
 		public:
 			SearchSplitPointerWork(
@@ -146,7 +146,7 @@ namespace gbdt
 					);
 			~SearchSplitPointerWork();
 			bool NeedDelete()const;
-			int DoWork();
+			int DoWork(uint32 * Tmat, FloatT * Ty, FloatT * Tweight);
 		private:
 			GbdtConf * m_pconfig;
 			const DecisionTreeNode * m_pSplitNode;

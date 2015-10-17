@@ -72,35 +72,6 @@ int main(int argc,char * argv[])
 	}
 	
 
-	if(mp.find("-tr") != mp.end() && mp.find("-te") != mp.end())
-	{
-		InstancePool newTrainPool(&config);
-		InstancePool newTestPool(&config);
-		forest.GetNewInstancePool(trainPool,newTrainPool);
-		forest.GetNewInstancePool(testinstancepool,newTestPool);
-		
-
-		FILE * fpNewTrain = fopen(sNewTrainFile.c_str(), "w");
-		for(int i=0;i<newTrainPool.Size();i++)
-		{
-			string sTmp = newTrainPool[i].ToString() + "\n" ;
-			fputs(sTmp.c_str(),fpNewTrain);
-		}
-		fclose(fpNewTrain);
-
-
-		FILE * fpNewTest = fopen(sNewTestFile.c_str(),"w");
-		for(int i=0;i<newTestPool.Size();i++)
-		{
-			string sTmp = newTestPool[i].ToString() + "\n" ;
-			fputs(sTmp.c_str(),fpNewTest);
-		}
-
-		fclose(fpNewTest);
-
-	}
-
-
 
 	ret = forest.SaveModel();
 	if(ret != 0)

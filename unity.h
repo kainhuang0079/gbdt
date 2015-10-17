@@ -12,6 +12,8 @@
 #include<assert.h>
 #include<time.h>
 #include<pthread.h>
+#include <sys/time.h> 
+#include"Log.h"
 namespace Comm
 {
 	
@@ -20,17 +22,32 @@ namespace Comm
 		public:
 			TimeStat(const std::string & prefix)
 			{
-				m_start = time(NULL);
+				m_start = getCurrentTime();
 				m_prefix = prefix;
+				//LogDebug("%s begin",m_prefix.c_str());
 				printf("%s begin\n",m_prefix.c_str());
 				puts("---------------------------------------------------------------------------------------------------------\n");
 			}
 
-			~TimeStat()
+			void TimeMark(const std::string & minstr)
 			{
-				printf("%s  TimeCost : %ds\n",m_prefix.c_str(),(time(NULL) - m_start));
+				//LogDebug("%s %s TimeCost : %dms",m_prefix.c_str(), minstr.c_str(), (getCurrentTime() - m_start));
+				printf("%s %s TimeCost : %dms\n",m_prefix.c_str(), minstr.c_str(), (getCurrentTime() - m_start));
 				puts("----------------------------------------------------------------------------------------------------------\n");
 			}
+
+			~TimeStat()
+			{
+				//LogDebug("%s  TimeCost : %dms",m_prefix.c_str(),(getCurrentTime() - m_start));
+				printf("%s  TimeCost : %dms\n",m_prefix.c_str(),(getCurrentTime() - m_start));
+				puts("----------------------------------------------------------------------------------------------------------\n");
+			}
+			long getCurrentTime()  
+			{  
+				struct timeval tv;  
+				gettimeofday(&tv,NULL);  
+				return tv.tv_sec * 1000 + tv.tv_usec / 1000;  
+			}  
 		private:
 			time_t m_start;
 			std::string m_prefix;

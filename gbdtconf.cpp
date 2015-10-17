@@ -14,7 +14,7 @@ namespace gbdt
 			Comm::LogErr("GbdtConf::Init makepool fail ");
 			return -1;
 		}
-		const int ValueNum = 21;
+		const int ValueNum = 18;
 		std::string sValueName[ValueNum]={
 			"SpliterThreadNum",
 			"SearchSplitPointerThreadNum",
@@ -30,9 +30,6 @@ namespace gbdt
 			"MaxNodes",
 			"OutputModelFilePath",
 			"LogLevel",
-			"IsLearnNewInstances",
-			"IsPushBackOgX",
-			"OutputNewInstancesFilePath",
 			"InputDataFilePath",
 			"InputModelFilePath",
 			"TestDataFliePath",
@@ -68,9 +65,6 @@ namespace gbdt
 		MaxNodes = atoi(pool["MaxNodes"].c_str());
 		OutputModelFilePath = pool["OutputModelFilePath"];
 		LogLevel = atoi(pool["LogLevel"].c_str());
-		IsLearnNewInstances = atoi(pool["IsLearnNewInstances"].c_str());
-		IsPushBackOgX = atoi(pool["IsPushBackOgX"].c_str());
-		OutputNewInstancesFilePath = pool["OutputNewInstancesFilePath"];
 		InputDataFilePath = pool["InputDataFilePath"];
 		InputModelFilePath= pool["InputModelFilePath"];
 		TestDataFliePath = pool["TestDataFliePath"];
@@ -90,9 +84,6 @@ namespace gbdt
 			<<"\nMaxNodes = "<<MaxNodes
 			<<"\nOutputModelFilePath = "<<OutputModelFilePath
 			<<"\nLogLevel = "<<LogLevel
-			<<"\nIsLearnNewInstances = "<<IsLearnNewInstances
-			<<"\nIsPushBackOgX = "<<IsPushBackOgX
-			<<"\nOutputNewInstancesFilePath = "<<OutputNewInstancesFilePath
 			<<"\nInputDataFilePath = "<<InputDataFilePath
 			<<"\nInputModelFilePath = "<<InputModelFilePath
 			<<"\nTestDataFliePath = "<<TestDataFliePath

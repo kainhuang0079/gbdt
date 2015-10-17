@@ -35,16 +35,17 @@ namespace gbdt
 			int SaveModel();
 			int LoadModel();
 			int Predict(const std::vector<FloatT> &X, FloatT &predict);
+			int Predict(const std::vector<FloatT> &X, FloatT &predict, std::vector<int> &leafs);
+			int BatchPredict(InstancePool * pInstancepool, std::vector<FloatT> &vecPredict);
+			int BatchPredict(InstancePool * pInstancepool, std::vector<FloatT> &vecPredict, std::vector< std::vector<FloatT> > &vecLeafs);
+
 			FloatT FitError();
 			void SetTestInstancePool(InstancePool * pTestInstancePool);
 			FloatT TestError();
-			int GetNewInstance(const Instance & instance, Instance & newInstance);
-			int GetNewInstance(const Instance & instance, SparseInstance & newInstance);
 
-			int GetNewInstancePool(InstancePool &instancepool,InstancePool &newInstancePool);
+			std::vector<DecisionTree *> m_Forest;
 		private:
 			int Residual();
-			int LearnNewInstance();
 			int SaveResult();
 			void FeatureStat();
 
@@ -52,7 +53,6 @@ namespace gbdt
 			GbdtConf * m_pconfig;
 			InstancePool * m_pInstancePool;
 			InstancePool * m_pTestInstancePool;
-			std::vector<DecisionTree *> m_Forest;
 	};
 	class ResidualThreadWork : public Comm::Work
 	{

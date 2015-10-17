@@ -5,7 +5,7 @@ namespace gbdt
 {
 	typedef unsigned int uint32; 
 	typedef unsigned long long uint64;
-	typedef float FloatT;
+	typedef double FloatT;
 //	typedef float FloatT;
 	const FloatT EPS = 1e-6;
 	class GbdtConf:public Comm::Config
@@ -30,9 +30,6 @@ namespace gbdt
 			int MaxNodes;
 			std::string OutputModelFilePath;
 			int LogLevel;
-			int IsLearnNewInstances;
-			int IsPushBackOgX;
-			std::string OutputNewInstancesFilePath;
 			std::string InputDataFilePath;
 			std::string InputModelFilePath;
 			std::string TestDataFliePath;

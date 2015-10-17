@@ -1,5 +1,6 @@
 #include<sstream>
 #include<fstream>
+#include<omp.h>
 #include<time.h>
 #include<memory>
 #include"unity.h"
@@ -29,6 +30,7 @@ namespace gbdt
 			int InstancesNum
 			)
 	{
+		//Comm::TimeStat stat("DecisionTreeNode construct");
 		m_status = status;
 		m_depth = depth;
 		m_ppInstances = ppInstances;
@@ -55,6 +57,7 @@ namespace gbdt
 		m_LeafIndex = -1;
 		m_lson = -1;
 		m_rson = -1;
+		//stat.TimeMark("DecisionTreeNode construct " + DebugStr());
 	}
 	
 	DecisionTreeNode::DecisionTreeNode(
@@ -93,7 +96,7 @@ namespace gbdt
 		return "";
 
 	}
-	std::string DecisionTreeNode::DebugStr()
+	std::string DecisionTreeNode::DebugStr() const
 	{
 		FloatT target = m_sum_y_X_weight * m_sum_y_X_weight / m_sumWeight;
 		FloatT avg = m_sum_y_X_weight / m_sumWeight;
@@ -141,12 +144,13 @@ namespace gbdt
 			}
 		}
 		*/
+		//Comm::TimeStat stat("SpliterWork " + m_pSplitNode->DebugStr());
 		if(IsLeaf())
 		{
 			m_pSplitNode->m_status = LEAF;
 		//	printf("SpliterWork::DoWork the node is leaf m_pSplitNode->DebugStr() = <%s>\n",m_pSplitNode->DebugStr().c_str());
 			Comm::LogInfo("SpliterWork::DoWork the node is leaf m_pSplitNode->DebugStr() = <%s>",m_pSplitNode->DebugStr().c_str());
-			if(!m_pconfig->IsLearnNewInstances)m_pSplitNode->m_ppInstances = Comm::Free(m_pSplitNode->m_ppInstances);
+			m_pSplitNode->m_ppInstances = Comm::Free(m_pSplitNode->m_ppInstances);
 			return 0;
 		}
 		std::vector<uint32> SubFeatures;
@@ -165,47 +169,6 @@ namespace gbdt
 		}
 		
 		//std::random_shuffle(m_pSplitNode->m_ppInstances, m_pSplitNode->m_ppInstances + m_pSplitNode->m_InstancesNum);
-
-		//#pragma omp parallel for num_threads(m_pconfig->SearchSplitPointerThreadNum)
-		#pragma omp parallel for 
-		for(uint32 i=0;i<SubFeatures.size();i++)
-		{
-			SearchSplitPointerWork * pwork = new SearchSplitPointerWork(
-					m_pconfig,
-					m_pSplitNode,
-					m_pInstancePool,
-					vecpWorkInfo[i]
-					);
-			int para_ret = pwork->DoWork();
-			if(para_ret != 0)
-				Comm::LogErr("SpliterWork::DoWork parallel for fail!!! SearchSplitPointerWork DoWork fail para_ret = %d", para_ret);
-		}
-
-		WaitAllSearchSplitPointerWorkDone(vecpWorkInfo);
-
-		SearchSplitPointerWorkInfo * pBestWorkInfo = NULL;
-		FloatT BestTarget = m_pSplitNode->m_sum_y_X_weight * m_pSplitNode->m_sum_y_X_weight / m_pSplitNode->m_sumWeight;
-		for(uint32 i=0;i<vecpWorkInfo.size();i++)
-		{
-			if(vecpWorkInfo[i]->m_target > BestTarget) //god!
-			{
-				BestTarget = vecpWorkInfo[i]->m_target;
-				pBestWorkInfo = vecpWorkInfo[i];
-			}
-		}
-
-		if(NULL == pBestWorkInfo)
-		{
-			m_pSplitNode->m_status = LEAF;
-			Comm::LogInfo("SpliterWork::DoWork pBestWorkInfo = NULL m_pSplitNode->DebugStr() = <%s>",m_pSplitNode->DebugStr().c_str());
-			if(!m_pconfig->IsLearnNewInstances)m_pSplitNode->m_ppInstances = Comm::Free(m_pSplitNode->m_ppInstances);
-			for(uint32 i=0;i<vecpWorkInfo.size();i++)
-			{
-				vecpWorkInfo[i] = Comm::Delete(vecpWorkInfo[i]);
-			}
-			return 0;
-		}
-
 		Instance ** ppInstances = (Instance **)malloc((m_pSplitNode->m_InstancesNum + 3) * sizeof(Instance *));
 		int InstancesNum = m_pSplitNode->m_InstancesNum;
 		if(!ppInstances)
@@ -229,17 +192,83 @@ namespace gbdt
 
 		memcpy(ppInstances, m_pSplitNode->m_ppInstances, m_pSplitNode->m_InstancesNum * sizeof(Instance *));
 
-		std::sort(ppInstances, ppInstances + InstancesNum, FeatureCmp(pBestWorkInfo->m_splitFeatureId));
+		uint32 * Tmat = (uint32 *)malloc(m_pconfig->FeatureNum * m_pSplitNode->m_InstancesNum * sizeof(uint32));
+		FloatT * Ty = (FloatT *)malloc(m_pSplitNode->m_InstancesNum * sizeof(FloatT));
+		FloatT * Tweight = (FloatT *)malloc(m_pSplitNode->m_InstancesNum * sizeof(FloatT));
 
-		int i;
-		for(i = 0; ppInstances[i]->X[pBestWorkInfo->m_splitFeatureId] < pBestWorkInfo->m_splitFeatureValue; i++);
-		pBestWorkInfo->m_splitIndex = i;
+		int max_threads = std::min(omp_get_max_threads(), m_pconfig->SearchSplitPointerThreadNum);
+		#pragma omp parallel for schedule(dynamic, 100) num_threads(max_threads)
+		for(int i=0;i<m_pSplitNode->m_InstancesNum;i++)
+		{
+			Instance * pInstance = m_pSplitNode->m_ppInstances[i];
+			Ty[i] = pInstance->y;
+			Tweight[i] = pInstance->weight;
+			for(int j=0;j<pInstance->X_BucketIndex.size();j++)
+			{
+				Tmat[j * m_pSplitNode->m_InstancesNum + i] = pInstance->X_BucketIndex[j];
+			}
+		}
+		//stat.TimeMark("make Tmat finish");
+
+		//#pragma omp parallel for num_threads(m_pconfig->SearchSplitPointerThreadNum)
+		#pragma omp parallel for schedule(dynamic, 1) num_threads(max_threads)
+		for(uint32 i=0;i<SubFeatures.size();i++)
+		{
+			SearchSplitPointerWork * pwork = new SearchSplitPointerWork(
+					m_pconfig,
+					m_pSplitNode,
+					m_pInstancePool,
+					vecpWorkInfo[i]
+					);
+			int para_ret = pwork->DoWork(Tmat, Ty, Tweight);
+			if(para_ret != 0)
+				Comm::LogErr("SpliterWork::DoWork parallel for fail!!! SearchSplitPointerWork DoWork fail para_ret = %d", para_ret);
+		}
+
+		WaitAllSearchSplitPointerWorkDone(vecpWorkInfo);
+
+		//stat.TimeMark("fine split point finish");
+
+		Tmat = Comm::Free(Tmat);
+		Ty = Comm::Free(Ty);
+		Tweight = Comm::Free(Tweight);
+
+		//stat.TimeMark("Free Tmat finish");
+
+		SearchSplitPointerWorkInfo * pBestWorkInfo = NULL;
+		FloatT BestTarget = m_pSplitNode->m_sum_y_X_weight * m_pSplitNode->m_sum_y_X_weight / m_pSplitNode->m_sumWeight;
+		for(uint32 i=0;i<vecpWorkInfo.size();i++)
+		{
+			if(vecpWorkInfo[i]->m_target > BestTarget) //god!
+			{
+				BestTarget = vecpWorkInfo[i]->m_target;
+				pBestWorkInfo = vecpWorkInfo[i];
+			}
+		}
+
+		if(NULL == pBestWorkInfo)
+		{
+			m_pSplitNode->m_status = LEAF;
+			Comm::LogInfo("SpliterWork::DoWork pBestWorkInfo = NULL m_pSplitNode->DebugStr() = <%s>",m_pSplitNode->DebugStr().c_str());
+			m_pSplitNode->m_ppInstances = Comm::Free(m_pSplitNode->m_ppInstances);
+			for(uint32 i=0;i<vecpWorkInfo.size();i++)
+			{
+				vecpWorkInfo[i] = Comm::Delete(vecpWorkInfo[i]);
+			}
+			return 0;
+		}
+		
+		//std::sort(ppInstances, ppInstances + InstancesNum, FeatureCmp(pBestWorkInfo->m_splitFeatureId));
+
+		//int i;
+		//for(i = 0; ppInstances[i]->X[pBestWorkInfo->m_splitFeatureId] < pBestWorkInfo->m_splitFeatureValue; i++);
+		//pBestWorkInfo->m_splitIndex = i;
 		int LeftInstanceNum = pBestWorkInfo->m_splitIndex;
 		int RightInstanceNum = m_pSplitNode->m_InstancesNum - pBestWorkInfo->m_splitIndex;
 		if(LeftInstanceNum < m_pconfig->MinSampleLeaf || RightInstanceNum < m_pconfig->MinSampleLeaf)
 		{
 			m_pSplitNode->m_status = LEAF;
-			if(!m_pconfig->IsLearnNewInstances)m_pSplitNode->m_ppInstances = Comm::Free(m_pSplitNode->m_ppInstances);
+			m_pSplitNode->m_ppInstances = Comm::Free(m_pSplitNode->m_ppInstances);
 			for(uint32 i=0;i<vecpWorkInfo.size();i++)
 			{
 				vecpWorkInfo[i] = Comm::Delete(vecpWorkInfo[i]);
@@ -265,9 +294,21 @@ namespace gbdt
 			return -1;
 		}
 
-		
-		memcpy(ppLeftInstances, ppInstances, LeftInstanceNum * sizeof(Instance *));
-		memcpy(ppRightInstances, ppInstances + LeftInstanceNum, RightInstanceNum * sizeof(Instance *)); 
+		int leaf = 0;
+		int right = 0;
+		for(int i = 0; i < m_pSplitNode->m_InstancesNum; i++)
+		{
+			if(ppInstances[i]->X[pBestWorkInfo->m_splitFeatureId] < pBestWorkInfo->m_splitFeatureValue)
+			{
+				ppLeftInstances[leaf++] = ppInstances[i];
+			}
+			else
+			{
+				ppRightInstances[right++] = ppInstances[i];
+			}
+		}
+		//memcpy(ppLeftInstances, ppInstances, LeftInstanceNum * sizeof(Instance *));
+		//memcpy(ppRightInstances, ppInstances + LeftInstanceNum, RightInstanceNum * sizeof(Instance *)); 
 
 
 		int lson = m_pmempool->New(
@@ -290,7 +331,7 @@ namespace gbdt
 		{
 			m_pSplitNode->m_status = LEAF;
 			Comm::LogInfo("SpliterWork::DoWork lson < 0 or rson < 0 mempool maybe full m_pSplitNode->DebugStr() = <%s>",m_pSplitNode->DebugStr().c_str());
-			if(!m_pconfig->IsLearnNewInstances)m_pSplitNode->m_ppInstances = Comm::Free(m_pSplitNode->m_ppInstances);
+			m_pSplitNode->m_ppInstances = Comm::Free(m_pSplitNode->m_ppInstances);
 			for(uint32 i=0;i<vecpWorkInfo.size();i++)
 			{
 				vecpWorkInfo[i] = Comm::Delete(vecpWorkInfo[i]);
@@ -442,22 +483,28 @@ namespace gbdt
 		return true;
 	}
 
-	int SearchSplitPointerWork::DoWork()
+	int SearchSplitPointerWork::DoWork(uint32 * Tmat, FloatT * Ty, FloatT * Tweight)
 	{
 		m_pSearchSplitPointerWorkInfo->m_target = (m_pSplitNode->m_sum_y_X_weight * m_pSplitNode->m_sum_y_X_weight)/m_pSplitNode->m_sumWeight;
 
-		int InstancesNum = m_pSplitNode->m_InstancesNum / 1;
+		int InstancesNum = m_pSplitNode->m_InstancesNum;
 
 		int featureID = m_pSearchSplitPointerWorkInfo->m_splitFeatureId;
 
 		int log_num = log(InstancesNum * 1.0) / log(2.0);
 
-		/*	
-		Instance ** ppInstances = (Instance **)malloc((InstancesNum + 3)*sizeof(Instance *));
-		int start = rand() % m_pSplitNode->m_InstancesNum;
-		for(int i = 0; i < InstancesNum; i++)
+		/*
+		Instance ** ppInstances;
+
 		{
-			ppInstances[i] = m_pSplitNode->m_ppInstances[(start + i) % m_pSplitNode->m_InstancesNum];
+			Comm::TimeStat stat("Sampling");
+			ppInstances = (Instance **)malloc((InstancesNum + 3)*sizeof(Instance *));
+
+			for(int i = 0; i < InstancesNum; i++)
+			{
+				int start = rand() % m_pSplitNode->m_InstancesNum;
+				ppInstances[i] = m_pSplitNode->m_ppInstances[start];
+			}
 		}
 		Instance ** ppInstances; 
 		int ret_num;
@@ -469,6 +516,8 @@ namespace gbdt
 		if(m_pInstancePool->m_FeatureBucketMap[featureID].size() >= InstancesNum * log_num )
 		//if(1)
 		{
+			//Comm::TimeStat stat("qsort split " + m_pSearchSplitPointerWorkInfo->DebugStr());
+			
 			Instance ** ppInstances = (Instance **)malloc((InstancesNum + 3)*sizeof(Instance *));
 			
 			if(!ppInstances)
@@ -477,6 +526,7 @@ namespace gbdt
 				return -1;
 			}
 			memcpy(ppInstances, m_pSplitNode->m_ppInstances, InstancesNum * sizeof(Instance *));
+			
 			FloatT left_sum_y_X_weight = 0.0;
 			FloatT right_sum_y_X_weight = m_pSplitNode->m_sum_y_X_weight;
 			FloatT left_sumWeight = 0.0;
@@ -500,7 +550,7 @@ namespace gbdt
 					{
 						m_pSearchSplitPointerWorkInfo->m_target = tmp_target;
 						m_pSearchSplitPointerWorkInfo->m_splitFeatureValue = (ppInstances[i]->X[featureID] + ppInstances[i + 1]->X[featureID])/2.0;
-						//m_pSearchSplitPointerWorkInfo->m_splitIndex = i + 1;
+						m_pSearchSplitPointerWorkInfo->m_splitIndex = i + 1;
 					}
 				}
 			}
@@ -510,22 +560,31 @@ namespace gbdt
 		}
 		else
 		{
+			//Comm::TimeStat stat("bucket sort split " + m_pSearchSplitPointerWorkInfo->DebugStr() + " " + this->m_pSplitNode->DebugStr());
 			//puts("new>>>>>>");
 			FloatT left_sum_y_X_weight = 0.0;
 			FloatT right_sum_y_X_weight = m_pSplitNode->m_sum_y_X_weight;
 			FloatT left_sumWeight = 0.0;
 			FloatT right_sumWeight = m_pSplitNode->m_sumWeight;
 			std::vector<Bucket> tmp_buckets(m_pInstancePool->m_FeatureBucketMap[featureID].size());
+			//Bucket tmp_buckets[10086];
 			Instance ** ppInstances = m_pSplitNode->m_ppInstances;
+			//stat.TimeMark("====bucket sort split 0.5====" + m_pSearchSplitPointerWorkInfo->DebugStr() + " " + this->m_pSplitNode->DebugStr());
 			for(int i = 0; i < InstancesNum; i++)
 			{
-				int BucketIndex = ppInstances[i]->X_BucketIndex[featureID];
-				tmp_buckets[BucketIndex].sum_y_X_weight += ppInstances[i]->y * ppInstances[i]->weight;
-				tmp_buckets[BucketIndex].sumWeight += ppInstances[i]->weight; 
-				//tmp_buckets[BucketIndex].num++;
+				//int BucketIndex = ppInstances[i]->X_BucketIndex[featureID];
+				int BucketIndex = Tmat[InstancesNum * featureID + i];
+				Bucket & tmp = tmp_buckets[BucketIndex];
+				//Instance & instance = *ppInstances[i];
+				//tmp.sum_y_X_weight += instance.y * instance.weight;
+				tmp.sum_y_X_weight += Ty[i] * Tweight[i];
+				//tmp.sumWeight += instance.weight; 
+				tmp.sumWeight += Tweight[i]; 
+				tmp_buckets[BucketIndex].num++;
 			}
+			//stat.TimeMark("====bucket sort split 1====" + m_pSearchSplitPointerWorkInfo->DebugStr() + " " + this->m_pSplitNode->DebugStr());
 			std::vector<Bucket> buckets;
-			for(int i = 0; i< tmp_buckets.size(); i++)
+			for(int i = 0; i< m_pInstancePool->m_FeatureBucketMap[featureID].size(); i++)
 			{
 				FloatT weight = tmp_buckets[i].sumWeight;
 				if(weight <= 0)
@@ -533,7 +592,8 @@ namespace gbdt
 				tmp_buckets[i].value = m_pInstancePool->m_FeatureBucketMap[featureID][i];
 				buckets.push_back(tmp_buckets[i]);
 			}
-			//int num = 0;
+			//stat.TimeMark("bucket sort split 2" + m_pSearchSplitPointerWorkInfo->DebugStr() + " " + this->m_pSplitNode->DebugStr());
+			int num = 0;
 			for(int i = 0; i < buckets.size() - 1; i++)
 			{
 				FloatT weight = buckets[i].sumWeight;
@@ -543,17 +603,18 @@ namespace gbdt
 				left_sumWeight += weight;
 				right_sumWeight -= weight;
 				FloatT tmp_target = (left_sum_y_X_weight * left_sum_y_X_weight / left_sumWeight) + (right_sum_y_X_weight * right_sum_y_X_weight / right_sumWeight);
-				//num += buckets[i].num;
+				num += buckets[i].num;
 				if(tmp_target > m_pSearchSplitPointerWorkInfo->m_target)
 				{
 					m_pSearchSplitPointerWorkInfo->m_target = tmp_target;
 					m_pSearchSplitPointerWorkInfo->m_splitFeatureValue = (buckets[i].value + buckets[i + 1].value)/2.0;
-					//m_pSearchSplitPointerWorkInfo->m_splitIndex = num;
+					m_pSearchSplitPointerWorkInfo->m_splitIndex = num;
 				}
 				
 			}
-		//	ppInstances = Comm::Free(ppInstances);
+			//ppInstances = Comm::Free(ppInstances);
 			m_pSearchSplitPointerWorkInfo->m_IsDone = true;
+			//stat.TimeMark("bucket sort split 3" + m_pSearchSplitPointerWorkInfo->DebugStr() + " " + this->m_pSplitNode->DebugStr());
 			return 0;
 		}
 	}
@@ -832,7 +893,13 @@ namespace gbdt
 	{
 		
 		FloatT ret =0.0;
-#pragma omp parallel for reduction(+:ret)
+		FloatT sum_weight = 0.0;
+		#pragma omp parallel for schedule(static) reduction(+:sum_weight)
+		for(int i=0;i<m_pInstancePool->Size();i++)
+		{
+			sum_weight += m_pInstancePool->GetInstance(i).weight;
+		}
+		#pragma omp parallel for schedule(static) reduction(+:ret)
 		for(int i=0;i<m_pInstancePool->Size();i++)
 		{
 			FloatT predict;
@@ -843,7 +910,7 @@ namespace gbdt
 		}	
 
 		//puts("zzzzzzz");
-		return ret / m_pInstancePool->Size();
+		return ret / sum_weight;
 	}
 	void DecisionTree::print()
 	{

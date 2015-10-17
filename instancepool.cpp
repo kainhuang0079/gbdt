@@ -60,6 +60,7 @@ namespace gbdt
 			int & RetInstanceNum
 			)
 	{
+		Comm::TimeStat stat("GetSubSamplesPtr");
 		srand(clock());
 		if(m_Instances.size()<= 0 )
 		{
@@ -110,6 +111,7 @@ namespace gbdt
 			int & RetInstanceNum
 			)
 	{
+		Comm::TimeStat stat("GetSubSamplesPtr");
 		srand(clock());
 		if(instanceNum <= 0 )
 		{
@@ -264,7 +266,30 @@ namespace gbdt
 			instance.index = m_Instances.size();
 			m_Instances.push_back(instance);
 		}
-		//MakeBucket();
+		/*
+		MakeBucket();
+		//test
+		FloatT a[10086];
+		memset(a, 0, sizeof(a));
+		{
+			Comm::TimeStat stat("test test");
+			FloatT tsum = 0;
+			for(int i = 0 ; i < m_Instances.size(); i++)
+			{
+				for(int j = 0; j < m_Instances[i].X.size(); j++)
+				{
+					tsum += m_Instances[i].X[j];
+					a[m_Instances[i].X_BucketIndex[j]] += m_Instances[i].y;
+				}
+			}
+			printf("tsum = %lf %d", tsum, m_Instances.size());
+
+		}
+		for(int i = 0; i < 10000; i++)
+		{
+			//printf("ta = %lf", a[i]);
+		}
+		*/
 		printf("InstancePool::Input input lines num = %d instances size = %d\n", cnt, m_Instances.size());
 		Comm::LogInfo("InstancePool::Input input lines num = %d instances size = %d", cnt, m_Instances.size());
 
@@ -274,7 +299,7 @@ namespace gbdt
 
 	int InstancePool::ProcessBucket(int FeatureId, std::vector<FloatT> & vecFeature)
 	{
-		printf("FeatureId %d\n", FeatureId);
+		//printf("FeatureId %d\n", FeatureId);
 		std::vector<FloatT> vecFeature_tmp;
 		vecFeature_tmp.resize(m_Instances.size());
 		for(int i = 0; i < m_Instances.size(); i++)
@@ -294,6 +319,7 @@ namespace gbdt
 			int bucketIndex = std::lower_bound(vecFeature.begin(), vecFeature.end(), val) - vecFeature.begin();
 			m_Instances[i].X_BucketIndex[FeatureId] = bucketIndex;
 		}
+		printf("FeatureId=%d, FeatureBucket size=%d\n", FeatureId, vecFeature.size());
 		return vecFeature.size();
 	}
 
@@ -301,12 +327,12 @@ namespace gbdt
 	void InstancePool::MakeBucket()
 	{
 		m_FeatureBucketMap.resize(m_pconfig->FeatureNum);
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic, 1)
 		for(int i = 0; i< m_Instances.size(); i++)
 		{
 			m_Instances[i].X_BucketIndex.resize(m_Instances[i].X.size());
 		}
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic, 1)
 		for(int i = 0; i< m_pconfig->FeatureNum; i++)
 		{
 			int FeatureBucketSize = ProcessBucket(i, m_FeatureBucketMap[i]);
