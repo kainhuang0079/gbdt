@@ -1,8 +1,10 @@
 CFLAGS = -Wall -O2
 #FFLAGS =-lpthread -fopenmp #-ltcmalloc
 FFLAGS =-lpthread -fopenmp -ltcmalloc
-gbdt_train:gbdtmain.cpp mempool.h DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o
-	g++ $(CFLAGS) -o gbdt_train gbdtmain.cpp DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o $(FFLAGS)
+gbdt_train:gbdt_train.cpp mempool.h DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o
+	g++ $(CFLAGS) -o gbdt_train gbdt_train.cpp DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o $(FFLAGS)
+#gbdt_train:gbdtmain.cpp mempool.h DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o
+#	g++ $(CFLAGS) -o gbdt_train gbdtmain.cpp DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o $(FFLAGS)
 testGradientBoosting:testGradientBoosting.cpp mempool.h DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o 
 	g++ $(CFLAGS) -o testGradientBoosting testGradientBoosting.cpp DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o $(FFLAGS)
 test:test.cpp mempool.h Log.o threadpool.o unity.o 

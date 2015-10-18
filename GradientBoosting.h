@@ -37,16 +37,16 @@ namespace gbdt
 			int Predict(const std::vector<FloatT> &X, FloatT &predict);
 			int Predict(const std::vector<FloatT> &X, FloatT &predict, std::vector<int> &leafs);
 			int BatchPredict(InstancePool * pInstancepool, std::vector<FloatT> &vecPredict);
-			int BatchPredict(InstancePool * pInstancepool, std::vector<FloatT> &vecPredict, std::vector< std::vector<FloatT> > &vecLeafs);
+			int BatchPredict(InstancePool * pInstancepool, std::vector<FloatT> &vecPredict, std::vector< std::vector<int> > &vecLeafs);
 
 			FloatT FitError();
 			void SetTestInstancePool(InstancePool * pTestInstancePool);
 			FloatT TestError();
 
 			std::vector<DecisionTree *> m_Forest;
+			int SaveResult();
 		private:
 			int Residual();
-			int SaveResult();
 			void FeatureStat();
 
 			int m_TotLeafCnt;

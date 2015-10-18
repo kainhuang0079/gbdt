@@ -52,7 +52,7 @@ namespace gbdt
 				return -1;
 			}
 			m_Forest.push_back(pTree);
-			if(m_pconfig->LogLevel >= 2)printf("i = %d FitError = %f TestError = %f\n",i,FitError(),TestError());
+			if(m_pconfig->LogLevel >= 3)printf("i = %d FitError = %f TestError = %f\n",i,FitError(),TestError());
 			{
 				Comm::TimeStat stat("Residual");
 				ret = Residual();
@@ -70,7 +70,6 @@ namespace gbdt
 			Comm::LogErr("GradientBoostingForest::Fit fail ! SaveResult fail!");
 			return -1;
 		}
-		
 		if(m_pconfig->LogLevel >= 2)FeatureStat();
 
 		return 0;
@@ -205,7 +204,7 @@ namespace gbdt
 		{
 			FloatT tmpPredict;
 			int leaf;
-			ret = m_Forest[i]->Predict(X,tmpPredict, leaf);
+			ret = m_Forest[i]->Predict(X, tmpPredict, leaf);
 			if(ret !=0)
 			{
 				Comm::LogErr("GradientBoostingForest::Predict fail! m_Forest %d Predict fail!",i);
@@ -258,7 +257,7 @@ namespace gbdt
 		return 0;
 	}
 
-	int GradientBoostingForest::BatchPredict(InstancePool * pInstancepool, std::vector<FloatT> &vecPredict, std::vector< std::vector<FloatT> > &vecLeafs)
+	int GradientBoostingForest::BatchPredict(InstancePool * pInstancepool, std::vector<FloatT> &vecPredict, std::vector< std::vector<int> > &vecLeafs)
 	{
 	}
 	void GradientBoostingForest::SetTestInstancePool(InstancePool * pTestInstancePool)

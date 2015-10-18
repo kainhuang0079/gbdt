@@ -514,10 +514,10 @@ namespace gbdt
 				ppInstances, ret_num);
 		InstancesNum = ret_num;
 		*/
-		if(m_pInstancePool->m_FeatureBucketMap[featureID].size() >= InstancesNum * log_num )
+		if(m_pInstancePool->m_FeatureBucketMap[featureID].size() >= InstancesNum * log_num * 5)
 		//if(1)
 		{
-			Comm::TimeStat stat("qsort split " + m_pSearchSplitPointerWorkInfo->DebugStr());
+			//Comm::TimeStat stat("qsort split " + m_pSearchSplitPointerWorkInfo->DebugStr());
 			
 			Instance ** ppInstances = (Instance **)malloc((InstancesNum + 3)*sizeof(Instance *));
 			
