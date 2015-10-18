@@ -169,7 +169,8 @@ namespace gbdt
 		}
 		
 		//std::random_shuffle(m_pSplitNode->m_ppInstances, m_pSplitNode->m_ppInstances + m_pSplitNode->m_InstancesNum);
-		Instance ** ppInstances = (Instance **)malloc((m_pSplitNode->m_InstancesNum + 3) * sizeof(Instance *));
+		//Instance ** ppInstances = (Instance **)malloc((m_pSplitNode->m_InstancesNum + 3) * sizeof(Instance *));
+		Instance **& ppInstances = m_pSplitNode->m_ppInstances;
 		int InstancesNum = m_pSplitNode->m_InstancesNum;
 		if(!ppInstances)
 		{
@@ -190,14 +191,14 @@ namespace gbdt
 		}
 		*/
 
-		memcpy(ppInstances, m_pSplitNode->m_ppInstances, m_pSplitNode->m_InstancesNum * sizeof(Instance *));
+		//memcpy(ppInstances, m_pSplitNode->m_ppInstances, m_pSplitNode->m_InstancesNum * sizeof(Instance *));
 
 		uint32 * Tmat = (uint32 *)malloc(m_pconfig->FeatureNum * m_pSplitNode->m_InstancesNum * sizeof(uint32));
 		FloatT * Ty = (FloatT *)malloc(m_pSplitNode->m_InstancesNum * sizeof(FloatT));
 		FloatT * Tweight = (FloatT *)malloc(m_pSplitNode->m_InstancesNum * sizeof(FloatT));
 
 		int max_threads = std::min(omp_get_max_threads(), m_pconfig->SearchSplitPointerThreadNum);
-		#pragma omp parallel for schedule(dynamic, 100) num_threads(max_threads)
+		#pragma omp parallel for schedule(static, 100) num_threads(max_threads)
 		for(int i=0;i<m_pSplitNode->m_InstancesNum;i++)
 		{
 			Instance * pInstance = m_pSplitNode->m_ppInstances[i];
@@ -273,7 +274,7 @@ namespace gbdt
 			{
 				vecpWorkInfo[i] = Comm::Delete(vecpWorkInfo[i]);
 			}
-			ppInstances = Comm::Free(ppInstances);
+		//	ppInstances = Comm::Free(ppInstances);
 			return 0;
 		}
 		Instance ** ppLeftInstances = (Instance **)malloc((LeftInstanceNum + 3) * sizeof(Instance *));
@@ -288,7 +289,7 @@ namespace gbdt
 			{
 				vecpWorkInfo[i] = Comm::Delete(vecpWorkInfo[i]);
 			}
-			ppInstances = Comm::Free(ppInstances);
+		//	ppInstances = Comm::Free(ppInstances);
 			ppLeftInstances = Comm::Free(ppLeftInstances);
 			ppRightInstances = Comm::Free(ppRightInstances);
 			return -1;
@@ -336,7 +337,7 @@ namespace gbdt
 			{
 				vecpWorkInfo[i] = Comm::Delete(vecpWorkInfo[i]);
 			}
-			ppInstances = Comm::Free(ppInstances);
+		//	ppInstances = Comm::Free(ppInstances);
 			ppLeftInstances = Comm::Free(ppLeftInstances);
 			ppRightInstances = Comm::Free(ppRightInstances);
 
@@ -391,7 +392,7 @@ namespace gbdt
 			Comm::LogErr("SpliterWork::DoWork Add rson Work fail m_pSplitNode->DebugStr() = <%s>",m_pSplitNode->DebugStr().c_str());
 		}
 		//todo
-		ppInstances = Comm::Free(ppInstances);
+		//ppInstances = Comm::Free(ppInstances);
 
 		for(uint32 i=0;i<vecpWorkInfo.size();i++)
 		{
@@ -516,7 +517,7 @@ namespace gbdt
 		if(m_pInstancePool->m_FeatureBucketMap[featureID].size() >= InstancesNum * log_num )
 		//if(1)
 		{
-			//Comm::TimeStat stat("qsort split " + m_pSearchSplitPointerWorkInfo->DebugStr());
+			Comm::TimeStat stat("qsort split " + m_pSearchSplitPointerWorkInfo->DebugStr());
 			
 			Instance ** ppInstances = (Instance **)malloc((InstancesNum + 3)*sizeof(Instance *));
 			

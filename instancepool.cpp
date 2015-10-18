@@ -251,13 +251,14 @@ namespace gbdt
 				continue;
 			}
 			Instance instance;
+			instance.X.resize(m_pconfig->FeatureNum);
 			int i;
 			FloatT weight = atof(col[0].c_str());
 			FloatT y = atof(col[1].c_str());
 			for(i=2;i<m_pconfig->FeatureNum + 2;i++)
 			{
 				FloatT x = atof(col[i].c_str());
-				instance.X.push_back(x);
+				instance.X[i - 2] = x;
 			}
 			//instance.X_BucketIndex.resize(instance.X.size());
 			instance.y = y;
