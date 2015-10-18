@@ -146,7 +146,7 @@ namespace gbdt
 					);
 			~SearchSplitPointerWork();
 			bool NeedDelete()const;
-			int DoWork(uint32 * Tmat, FloatT * Ty, FloatT * Tweight);
+			int DoWork(const uint32 * Tmat, const FloatT * Ty, const FloatT * Tweight);
 		private:
 			GbdtConf * m_pconfig;
 			const DecisionTreeNode * m_pSplitNode;

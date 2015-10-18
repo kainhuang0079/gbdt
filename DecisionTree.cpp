@@ -484,7 +484,7 @@ namespace gbdt
 		return true;
 	}
 
-	int SearchSplitPointerWork::DoWork(uint32 * Tmat, FloatT * Ty, FloatT * Tweight)
+	int SearchSplitPointerWork::DoWork(const uint32 * Tmat, const FloatT * Ty, const FloatT * Tweight)
 	{
 		m_pSearchSplitPointerWorkInfo->m_target = (m_pSplitNode->m_sum_y_X_weight * m_pSplitNode->m_sum_y_X_weight)/m_pSplitNode->m_sumWeight;
 
