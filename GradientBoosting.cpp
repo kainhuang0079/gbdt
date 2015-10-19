@@ -40,6 +40,19 @@ namespace gbdt
 		int ret = -1;
 		for(int i=0;i<m_pconfig->TreeNum;i++)
 		{
+			
+			{
+				Comm::TimeStat stat("Residual");
+				ret = Residual();
+				printf("i = %d Residualed\n",i);
+			}
+
+			if(ret != 0)
+			{
+				Comm::LogErr("GradientBoostingForest::Fit fail! Residual fail!");
+				return -1;
+			}
+
 			DecisionTree * pTree = new DecisionTree(m_pconfig);
 			{
 				Comm::TimeStat stat("DecisionTree fit");
@@ -53,16 +66,8 @@ namespace gbdt
 			}
 			m_Forest.push_back(pTree);
 			if(m_pconfig->LogLevel >= 3)printf("i = %d FitError = %f TestError = %f\n",i,FitError(),TestError());
-			{
-				Comm::TimeStat stat("Residual");
-				ret = Residual();
-			}
-			printf("i = %d Residualed\n",i);
-			if(ret != 0)
-			{
-				Comm::LogErr("GradientBoostingForest::Fit fail! Residual fail!");
-				return -1;
-			}
+
+
 		}
 		ret = SaveResult();
 		if(ret != 0)
@@ -191,7 +196,14 @@ namespace gbdt
 				Comm::LogErr("GradientBoostingForest::Predict fail! m_Forest %d Predict fail!",i);
 				return -1;
 			}
-			predict += m_pconfig->LearningRate * tmpPredict;
+			if(i == m_Forest.size() - 1)
+			{
+				predict += tmpPredict;
+			}
+			else
+			{
+				predict += m_pconfig->LearningRate * tmpPredict;
+			}
 		}
 		return 0;
 	}
@@ -211,7 +223,14 @@ namespace gbdt
 				return -1;
 			}
 			leafs.push_back(leaf);
-			predict += m_pconfig->LearningRate * tmpPredict;
+			if(i == m_Forest.size() - 1)
+			{
+				predict += tmpPredict;
+			}
+			else
+			{
+				predict += m_pconfig->LearningRate * tmpPredict;
+			}
 		}
 		return 0;
 	}
@@ -494,11 +513,16 @@ namespace gbdt
 		for(int i = m_begin ;i < m_end; i++)
 		{
 			FloatT predict;
-			ret = m_pModel->m_Forest[m_pModel->m_Forest.size() - 1]->Predict(m_pInstancePool->GetInstance(i).X, predict);
-			if(ret !=0)
+			if(m_pModel->m_Forest.size() == 0)
+				predict = 0;
+			else
 			{
-				Comm::LogErr("ResidualThreadWork::DoWork fail! m_pModel Predict fail!");
-				return -1;
+				ret = m_pModel->m_Forest[m_pModel->m_Forest.size() - 1]->Predict(m_pInstancePool->GetInstance(i).X, predict);
+				if(ret !=0)
+				{
+					Comm::LogErr("ResidualThreadWork::DoWork fail! m_pModel Predict fail!");
+					return -1;
+				}
 			}
 			m_pInstancePool->GetInstance(i).y = m_pInstancePool->GetInstance(i).y - predict * m_pconfig->LearningRate;
 		}

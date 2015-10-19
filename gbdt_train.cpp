@@ -148,7 +148,7 @@ int main(int argc,char * argv[])
 		}
 		TimeStat ts(argv[0]);
 		ret = forest.Fit(&trainPool);
-		puts("forest Fit finish");
+		ts.TimeMark("forest Fit finish");
 		if(ret != 0)
 		{
 			puts("ERR:forest fit fail!");
