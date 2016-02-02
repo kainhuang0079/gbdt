@@ -23,7 +23,6 @@ namespace gbdt
 			void print();
 		public:
 			std::vector<FloatT> X;
-			std::vector<int> X_BucketIndex;
 			FloatT y;
 			FloatT ys;
 			FloatT weight;
@@ -55,6 +54,8 @@ namespace gbdt
 			int GetSubFeatureIDs(std::vector<uint32> & SubFeatures);
 			int GetSubFeatureIDs(FloatT SubFeatureRate, 
 					std::vector<uint32> & SubFeatures);
+            int GetSubIDs(int num, int totnum, 
+                    std::vector<uint32> &SubIDs);
 			virtual int Input();
 			virtual int Input(const std::string & InputDataFilePath);
 			Instance & GetInstance(int index);
@@ -66,6 +67,7 @@ namespace gbdt
 		public:
 			std::vector<int> m_FeatureBucketSize;
 			std::vector<std::vector<FloatT> >m_FeatureBucketMap;
+            uint32 * m_pTmat;
 		private:
 			int ProcessBucket(int FeatureId, std::vector<FloatT> & vecFeature);
 		private:

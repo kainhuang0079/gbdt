@@ -1,4 +1,4 @@
-CFLAGS = -Wall -O2
+CFLAGS = -Wall -O3
 #FFLAGS =-lpthread -fopenmp #-ltcmalloc
 FFLAGS =-lpthread -fopenmp -ltcmalloc
 gbdt_train:gbdt_train.cpp mempool.h DecisionTree.o unity.o Log.o gbdtconf.o threadpool.o instancepool.o GradientBoosting.o

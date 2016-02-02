@@ -40,9 +40,8 @@ namespace gbdt
 		int ret = -1;
 		for(int i=0;i<m_pconfig->TreeNum;i++)
 		{
-			
 			{
-				Comm::TimeStat stat("Residual");
+				//Comm::TimeStat stat("Residual");
 				ret = Residual();
 				printf("i = %d Residualed\n",i);
 			}
@@ -55,8 +54,9 @@ namespace gbdt
 
 			DecisionTree * pTree = new DecisionTree(m_pconfig);
 			{
-				Comm::TimeStat stat("DecisionTree fit");
+				//Comm::TimeStat stat("DecisionTree fit");
 				ret = pTree->Fit(m_pInstancePool);
+                //sleep(2);
 			}
 		//	printf("i = %d Fited pTree->FitError = %f\n",i,pTree->FitError());
 			if(ret != 0)
@@ -66,8 +66,6 @@ namespace gbdt
 			}
 			m_Forest.push_back(pTree);
 			if(m_pconfig->LogLevel >= 3)printf("i = %d FitError = %f TestError = %f\n",i,FitError(),TestError());
-
-
 		}
 		ret = SaveResult();
 		if(ret != 0)
@@ -76,7 +74,6 @@ namespace gbdt
 			return -1;
 		}
 		if(m_pconfig->LogLevel >= 2)FeatureStat();
-
 		return 0;
 	}
 	int GradientBoostingForest::SaveModel()
@@ -94,9 +91,6 @@ namespace gbdt
 			return -1;
 		}
 		int ret;
-		
-	//	puts("fopened");
-
 		ret = fprintf(fp,"%u %d\n",m_Forest.size(),m_TotLeafCnt);
 		if(ret < 0)
 		{
@@ -104,7 +98,6 @@ namespace gbdt
 			fclose(fp);
 			return -1;
 		}
-	//	puts("fopened fprintf");
 		for(int i=0;i<m_Forest.size();i++)
 		{
 			if(!m_Forest[i])
@@ -113,7 +106,7 @@ namespace gbdt
 				fclose(fp);
 				return -1;
 			}
-			printf("i = %d\n",i);
+			//printf("i = %d\n",i);
 			ret = m_Forest[i]->SaveModel(fp);
 			if(ret != 0)
 			{
@@ -122,9 +115,7 @@ namespace gbdt
 				return -1;
 			}
 		}
-
 		fclose(fp);
-		
 		std::string configfile = m_pconfig->OutputModelFilePath + ".conf";
 		fp = fopen(configfile.c_str(),"w");
 		if(!fp)
@@ -140,7 +131,6 @@ namespace gbdt
 			return -1;
 		}
 		fclose(fp);
-		
 		return 0;
 	}
 	int GradientBoostingForest::LoadModel()
@@ -253,10 +243,12 @@ namespace gbdt
 			{
 				Comm::LogErr("GradientBoostingForest::FitError fail! Predict fail");
 			}
-			ret = ret + ((m_pInstancePool->GetInstance(i).ys - predict) * (m_pInstancePool->GetInstance(i).ys - predict));
+			ret = ret + ((m_pInstancePool->GetInstance(i).ys - predict) *
+                    (m_pInstancePool->GetInstance(i).ys - predict)) * 
+                m_pInstancePool->GetInstance(i).weight;
 		}
 //		puts("FitError done");
-		return ret / sum_weight;
+		return sqrt(ret / sum_weight);
 	}
 
 
@@ -329,9 +321,9 @@ namespace gbdt
 
 			tmp = tmp * tmp;	
 			
-			ret = ret + tmp;
+			ret = ret + tmp * m_pTestInstancePool->GetInstance(i).weight;
 		}
-		ret = ret / sum_weight;
+		ret = sqrt(ret / sum_weight);
 
 		for(int i=0;i<8;i++)
 		{

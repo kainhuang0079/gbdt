@@ -42,11 +42,12 @@ namespace gbdt
 		printf("%s\n",str.c_str());	
 	}
 
-
-	InstancePool::InstancePool(GbdtConf *pconfig):m_pconfig(pconfig)
+	InstancePool::InstancePool(GbdtConf *pconfig):m_pconfig(pconfig), m_pTmat(NULL)
 	{}
 	InstancePool::~InstancePool()
-	{}
+	{
+        m_pTmat = Comm::Free(m_pTmat);
+    }
 	int InstancePool::GetSubSamplesPtr(
 			Instance ** & ppRetInstances, 
 			int & RetInstanceNum
@@ -187,18 +188,51 @@ namespace gbdt
 			last--;
 			tmp[select] = tmp[last];
 		}
+		tmp = Comm::Free(tmp);
 		return 0;
 	}
-	int InstancePool::Input()
-	{
-		return Input(m_pconfig->InputDataFilePath);
-	}
-	int InstancePool::Input(const std::string & InputDataFilePath)
-	{
-		std::ifstream fpinput(InputDataFilePath.c_str());
-		if(!fpinput)
-		{
-			Comm::LogErr("InstancePool::Input can not open input file %s",InputDataFilePath.c_str());
+    int InstancePool::GetSubIDs(
+            int num,
+            int totnum,
+            std::vector<uint32> & SubIDs
+            )
+    {
+        if(num < 1)num = 1;
+        int * tmp = (int * )malloc((totnum + 7)*sizeof(int));
+        if(!tmp)
+        {
+            Comm::LogErr("InstancePool::GetSubFeatureIDs tmp is NULL");
+            return -1;
+        }
+        SubIDs.clear();
+        for(int i=0;i<totnum;i++)
+        {
+            tmp[i]=i;
+        }
+        int last = totnum;
+        srand(time(NULL));
+        for(int i=0;i<num;i++)
+        {
+            int select = rand() % last;
+            int fid = tmp[select];
+            SubIDs.push_back(fid);
+            last--;
+            tmp[select] = tmp[last];
+        }
+		tmp = Comm::Free(tmp);
+        return 0;
+    }
+
+    int InstancePool::Input()
+    {
+        return Input(m_pconfig->InputDataFilePath);
+    }
+    int InstancePool::Input(const std::string & InputDataFilePath)
+    {
+        std::ifstream fpinput(InputDataFilePath.c_str());
+        if(!fpinput)
+        {
+            Comm::LogErr("InstancePool::Input can not open input file %s",InputDataFilePath.c_str());
 			return -1;
 		}
 		std::string line;
@@ -266,33 +300,9 @@ namespace gbdt
 			instance.weight = weight;
 			instance.index = m_Instances.size();
 			m_Instances.push_back(instance);
-		}
-		/*
-		MakeBucket();
-		//test
-		FloatT a[10086];
-		memset(a, 0, sizeof(a));
-		{
-			Comm::TimeStat stat("test test");
-			FloatT tsum = 0;
-			for(int i = 0 ; i < m_Instances.size(); i++)
-			{
-				for(int j = 0; j < m_Instances[i].X.size(); j++)
-				{
-					tsum += m_Instances[i].X[j];
-					a[m_Instances[i].X_BucketIndex[j]] += m_Instances[i].y;
-				}
-			}
-			printf("tsum = %lf %d", tsum, m_Instances.size());
-
-		}
-		for(int i = 0; i < 10000; i++)
-		{
-			//printf("ta = %lf", a[i]);
-		}
-		*/
-		printf("InstancePool::Input input lines num = %d instances size = %d\n", cnt, m_Instances.size());
-		Comm::LogInfo("InstancePool::Input input lines num = %d instances size = %d", cnt, m_Instances.size());
+        }
+        printf("InstancePool::Input input lines num = %d instances size = %d\n", cnt, m_Instances.size());
+        Comm::LogInfo("InstancePool::Input input lines num = %d instances size = %d", cnt, m_Instances.size());
 
 		return 0;
 	}
@@ -314,13 +324,16 @@ namespace gbdt
 		{
 			vecFeature.push_back(vecFeature_tmp[i]);
 		}
-		for(int i = 0; i < m_Instances.size(); i++)
+        const uint32 num = m_Instances.size();
+		for(int i = 0; i < num; i++)
 		{
 			FloatT val = m_Instances[i].X[FeatureId];
-			int bucketIndex = std::lower_bound(vecFeature.begin(), vecFeature.end(), val) - vecFeature.begin();
-			m_Instances[i].X_BucketIndex[FeatureId] = bucketIndex;
+			int bucketIndex = std::lower_bound(vecFeature.begin(),
+                    vecFeature.end(), val) - vecFeature.begin();
+			m_pTmat[FeatureId * num + i] = bucketIndex;
 		}
-		printf("FeatureId=%d, FeatureBucket size=%d\n", FeatureId, vecFeature.size());
+		printf("FeatureId=%d, FeatureBucket size=%d\n",
+                FeatureId, vecFeature.size());
 		return vecFeature.size();
 	}
 
@@ -328,11 +341,8 @@ namespace gbdt
 	void InstancePool::MakeBucket()
 	{
 		m_FeatureBucketMap.resize(m_pconfig->FeatureNum);
-		#pragma omp parallel for schedule(dynamic, 1)
-		for(int i = 0; i< m_Instances.size(); i++)
-		{
-			m_Instances[i].X_BucketIndex.resize(m_Instances[i].X.size());
-		}
+        m_pTmat = (uint32 *)malloc(sizeof(uint32) * m_pconfig->FeatureNum
+                * m_Instances.size());
 		#pragma omp parallel for schedule(dynamic, 1)
 		for(int i = 0; i< m_pconfig->FeatureNum; i++)
 		{
@@ -340,6 +350,15 @@ namespace gbdt
 			//printf("FeatureBucketSize = %d \n", FeatureBucketSize);
 		}
 
+        /*
+        if (m_pconfig->LogLevel <= 1) 
+        {
+            for(int i = 0; i < m_Instances.size(); i++)
+            {
+                std::vector<FloatT>().swap(m_Instances[i].X);
+            }
+        }
+        */
 	}
 
 	Instance & InstancePool::GetInstance(int index)

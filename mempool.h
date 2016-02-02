@@ -16,15 +16,17 @@ namespace Comm
 			{
 				m_num = 0;
 				m_maxSize = maxSize;
-				LogInfo("MemPool::MemPool() malloc memory size =  %uB", (unsigned int)(maxSize + 107) *sizeof(T));
-				m_pMem = (T *)malloc( (maxSize + 107) * sizeof(T) ); 	
+				LogInfo("MemPool::MemPool() malloc memory size =  %uB", (unsigned int)(maxSize + 7) *sizeof(T));
+				//m_pMem = (T *)malloc( (maxSize + 107) * sizeof(T) ); 	
+                m_pMem = new T[maxSize + 7];
 				if(NULL != m_pMem)LogInfo("MemPool::MemPool() malloc memory ok");
 				pthread_mutex_init(&m_mutex, NULL);
 			}
 
 			~MemPool()
 			{
-				free(m_pMem); 
+				//free(m_pMem); 
+                delete []m_pMem;
 				m_pMem = NULL;
 				pthread_mutex_destroy(&m_mutex);
 			}
@@ -33,10 +35,12 @@ namespace Comm
 			{
 				m_num = 0;
 				m_maxSize = maxSize;
-				free(m_pMem);
+				//free(m_pMem);
+                delete []m_pMem;
 				m_pMem = NULL;
-				printf("MemPool::ReSet() malloc memory size = %uB\n", (unsigned int)(maxSize + 107) *sizeof(T));
-				m_pMem = (T *)malloc( (maxSize + 107) * sizeof(T) ); 	
+				//printf("MemPool::ReSet() malloc memory size = %uB\n", (unsigned int)(maxSize + 107) *sizeof(T));
+				//m_pMem = (T *)malloc((maxSize + 7) * sizeof(T)); 	
+                m_pMem = new T[maxSize + 7];
 				if(NULL != m_pMem)printf("MemPool::ReSet() malloc memory ok\n");
 				else 
 				{

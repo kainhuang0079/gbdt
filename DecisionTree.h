@@ -39,35 +39,75 @@ namespace gbdt
 
 
 	class DecisionTreeNode
-	{
-		public:
-			DecisionTreeNode(
-					DecisionTreeNodeStatus status,
-					uint32 depth, 
-					Instance ** ppInstances,
-					int InstancesNum
-					);
-			DecisionTreeNode(
-					DecisionTreeNodeStatus status,
-					uint32 depth,
-					int splitFeatureId,
-					FloatT splitFeatureValue,
-					FloatT sumWeight,
-					FloatT sum_y_X_weight,
-					int LeafIndex,
-					int lson,
-					int rson
-					);
+    {
+        public:
+            DecisionTreeNode(
+                    InstancePool * pInstancepool,
+                    DecisionTreeNodeStatus status,
+                    uint32 depth, 
+                    const std::vector<uint32> & InstanceIds
+                    );
+            DecisionTreeNode(
+                    DecisionTreeNodeStatus status,
+                    uint32 depth,
+                    int splitFeatureId,
+                    FloatT splitFeatureValue,
+                    FloatT sumWeight,
+                    FloatT sum_y_X_weight,
+                    int LeafIndex,
+                    int lson,
+                    int rson
+                    );
+
+            inline DecisionTreeNode():m_pInstancePool(NULL), m_status(UNKOWN), 
+            m_depth(0), m_InstanceIds(0), m_InstancesHashCode(0), m_Error(0),
+            m_splitFeatureId(0), m_splitFeatureValue(0), m_sumWeight(0), m_sum_y_X_weight(0),
+            m_LeafIndex(0), m_lson(-1), m_rson(-1)
+            {
+            }
+            inline DecisionTreeNode(const DecisionTreeNode & r)
+            {
+                m_pInstancePool = r.m_pInstancePool;
+                m_status = r.m_status;
+                m_depth = r.m_depth;
+                m_InstanceIds = r.m_InstanceIds;
+                m_InstancesHashCode = r.m_InstancesHashCode;
+                m_Error = r.m_Error;
+                m_splitFeatureId = r.m_splitFeatureId;
+                m_splitFeatureValue = r.m_splitFeatureValue;
+                m_sumWeight = r.m_sumWeight;
+                m_sum_y_X_weight = r.m_sum_y_X_weight;
+                m_LeafIndex = r.m_LeafIndex;
+                m_lson = r.m_lson;
+                m_rson = r.m_rson;
+            }
+
+            inline DecisionTreeNode & operator=(const DecisionTreeNode & r)
+            {
+                m_pInstancePool = r.m_pInstancePool;
+                m_status = r.m_status;
+                m_depth = r.m_depth;
+                m_InstanceIds = r.m_InstanceIds;
+                m_InstancesHashCode = r.m_InstancesHashCode;
+                m_Error = r.m_Error;
+                m_splitFeatureId = r.m_splitFeatureId;
+                m_splitFeatureValue = r.m_splitFeatureValue;
+                m_sumWeight = r.m_sumWeight;
+                m_sum_y_X_weight = r.m_sum_y_X_weight;
+                m_LeafIndex = r.m_LeafIndex;
+                m_lson = r.m_lson;
+                m_rson = r.m_rson;
+            } 
 
 			~DecisionTreeNode();
 			std::string ToString();
 			std::string DebugStr() const;
 			void print();
 		public:
+            InstancePool * m_pInstancePool;
 			DecisionTreeNodeStatus m_status; 
 			uint32 m_depth;
-			Instance ** m_ppInstances;
-			int m_InstancesNum;
+            std::vector<uint32> m_InstanceIds;
 			
 			uint32 m_InstancesHashCode;
 			FloatT m_Error;
@@ -146,7 +186,7 @@ namespace gbdt
 					);
 			~SearchSplitPointerWork();
 			bool NeedDelete()const;
-			int DoWork(const uint32 * Tmat, const FloatT * Ty, const FloatT * Tweight);
+			int DoWork(const FloatT * Ty, const FloatT * Tweight);
 		private:
 			GbdtConf * m_pconfig;
 			const DecisionTreeNode * m_pSplitNode;
